@@ -1,0 +1,132 @@
+body {
+    margin: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.sidebar {
+    width: 20%;
+    background-color: #f9f9f9;
+    padding: 20px;
+    box-sizing: border-box;
+    border-right: 1px solid #ddd;
+    overflow-y: auto;
+    height: 100vh;
+    box-shadow: inset -2px 0 5px rgba(0, 0, 0, 0.05);
+}
+
+.sidebar h2 {
+    margin-top: 0;
+    font-size: 20px;
+    color: #333;
+}
+
+.map-container {
+    width: 80%;
+    height: 100%;
+}
+
+button, .toggle-btn {
+    padding: 8px 14px;
+    margin-top: 10px;
+    background-color: #007bff;
+    border: none;
+    color: white;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.2s ease;
+}
+
+button:active, .toggle-btn:active {
+    background-color: #0056b3;
+}
+
+#statusMessage {
+    margin-top: 12px;
+    font-size: 13px;
+    font-style: italic;
+    color: #555;
+}
+
+.processing {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #333;
+}
+
+.processing .spinner {
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #007bff;
+    border-radius: 50%;
+    width: 14px;
+    height: 14px;
+    animation: spin 1s linear infinite;
+}
+
+.completed {
+    color: green;
+    font-weight: 500;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+#results {
+    overflow: hidden;
+    transition: max-height 0.4s ease;
+    max-height: 0;
+}
+
+#results.show {
+    max-height: 1000px;
+}
+
+.result-entry {
+    margin-bottom: 10px;
+    border-radius: 5px;
+    background: #fff;
+    border: 1px solid #ddd;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.result-header {
+    background-color: #f1f1f1;
+    padding: 10px;
+    cursor: pointer;
+    font-weight: bold;
+    border-radius: 5px 5px 0 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.arrow {
+    font-size: 16px;
+    margin-left: 10px;
+}
+
+.result-content {
+    padding: 10px;
+    display: none;
+    animation: fadeIn 0.3s ease;
+}
+
+.result-entry a {
+    color: #007bff;
+    text-decoration: none;
+}
+
+.result-entry a:hover {
+    text-decoration: underline;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}

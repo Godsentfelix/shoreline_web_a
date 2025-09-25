@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Shoreline Analysis</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- Leaflet CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+
+    <!-- Leaflet Draw -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+    <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+
+    <!-- Leaflet MiniMap -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-minimap/dist/Control.MiniMap.min.css" />
+    <script src="https://unpkg.com/leaflet-minimap/dist/Control.MiniMap.min.js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+
+        .sidebar {
+            width: 20%;
+            background: #f9f9f9;
+            padding: 20px;
+            overflow-y: auto;
+            border-right: 1px solid #ccc;
+        }
+
+        .map-container {
+            width: 80%;
+            height: 100%;
+        }
+
+        #map {
+            height: 100%;
+            width: 100%;
+        }
+
+        h2 {
+            margin-top: 0;
+        }
+
+        #statusMessage {
+            margin-top: 10px;
+            font-size: 13px;
+            font-style: italic;
+        }
+
+        .processing {
+            color: #007bff;
+        }
+
+        .completed {
+            color: green;
+        }
+
+        .spinner {
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #007bff;
+            border-radius: 50%;
+            width: 12px;
+            height: 12px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 5px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        #coordinate-readout {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(255,255,255,0.9);
+            padding: 4px 8px;
+            font-size: 12px;
+            border-radius: 4px;
+            z-index: 999;
+        }
+
+        button {
+            margin-top: 5px;
+            padding: 5px 10px;
+            font-size: 12px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        select {
+            width: 100%;
+            padding: 3px 6px;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+
+        #results {
+            margin-top: 20px;
+        }
+
+        .result-entry {
+            margin-bottom: 10px;
+            padding: 10px;
+            background: #fff;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .result-content {
+            display: none;
+            margin-top: 8px;
+        }
+
+        .arrow {
+            font-size: 10px;
+            margin-left: 5px;
+        }
+
+        .result-entry a {
+            color: #007bff;
+        }
+
+        #compareStatusMessage {
+            font-size: 13px;
+            margin-top: 5px;
+        }
+
+        .leaflet-popup-content {
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        .comparison-layer-path {
+            stroke: orange;
+            stroke-width: 3;
+            fill: none;
+        }
+
+        .transect-line {
+            stroke: blue;
+            stroke-width: 2;
+            stroke-dasharray: 4;
+        }
+
+        .compare-popup-header {
+            font-weight: bold;
+            font-size: 14px;
+            color: #333;
+        }
+
+        #compareFile1,
+        #compareFile2 {
+            padding: 3px 6px;
+            font-size: 12px;
+            height: 24px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar" id="sidebar">
+        <h2>Shoreline Analysis</h2>
+        <form id="uploadForm" enctype="multipart/form-data">
+            <input type="file" name="files" multiple required><br>
+            <button type="submit">Process</button>
+            <div id="statusMessage"></div>
+        </form>
+
+        <button id="clearMapBtn">Clear Map</button>
+
+        <div style="margin-top: 20px;">
+            <label for="compareFile1">Compare File 1:</label>
+            <select id="compareFile1"></select>
+
+            <label for="compareFile2" style="margin-top: 10px;">Compare File 2:</label>
+            <select id="compareFile2"></select>
+
+            <button id="compareBtn">Compare</button>
+            <div id="compareStatusMessage"></div>
+            <div id="compareDownloadLink"></div>
+        </div>
+
+        <button id="toggleResultsBtn">Show Results</button>
+
+        <div id="results" style="display:none;">
+            <div id="resultsList"></div>
+        </div>
+    </div>
+
+    <div class="map-container" id="mapContainer">
+        <div id="map"></div>
+        <div id="coordinate-readout">Lat: 0, Lng: 0</div>
+    </div>
+
+    <script>
+        const map = L.map("map", {
+            center: [6.5244, 3.3792],
+            zoom: 10,
+            layers: []
+        });
+
+        const drawnLayers = [];
+        const osm = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            attribution: "© OpenStreetMap contributors"
+        }).addTo(map);
+
+        const esriImagery = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+            attribution: "Tiles © Esri"
+        });
+
+        const esriLabels = L.tileLayer("https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}", {
+            attribution: "Labels © Esri"
+        });
+
+        const hybrid = L.layerGroup([esriImagery, esriLabels]);
+
+        const baseLayers = {
+            "OpenStreetMap": osm,
+            "Hybrid (Satellite + Labels)": hybrid
+        };
+
+        const layerControl = L.control.layers(baseLayers).addTo(map);
+        new L.Control.MiniMap(osm, { toggleDisplay: true }).addTo(map);
+        const drawControl = new L.Control.Draw({ draw: true });
+        map.addControl(drawControl);
+
+        map.on("mousemove", function(e) {
+            document.getElementById("coordinate-readout").innerText =
+                `Lat: ${e.latlng.lat.toFixed(5)}, Lng: ${e.latlng.lng.toFixed(5)}`;
+        });
+
+        document.getElementById("toggleResultsBtn").addEventListener("click", () => {
+            const resultsDiv = document.getElementById("results");
+            resultsDiv.style.display = resultsDiv.style.display === 'none' ? 'block' : 'none';
+            document.getElementById("toggleResultsBtn").innerText = resultsDiv.style.display === 'none' ? 'Show Results' : 'Hide Results';
+        });
+
+        document.getElementById("uploadForm").addEventListener("submit", function(e) {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const status = document.getElementById("statusMessage");
+            const fileInput = e.target.querySelector("input[name='files']");
+            const files = Array.from(fileInput.files).map(f => f.name).join(", ");
+            status.innerHTML = `<span class="spinner"></span> Processing...`;
+
+            fetch("/process", {
+                method: "POST",
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                status.innerHTML = `<div class="completed">Processing completed for: ${files}</div>`;
+
+                if (data.results) {
+                    const resultsList = document.getElementById("resultsList");
+                    data.results.forEach((result) => {
+                        document.getElementById("results").style.display = "block";
+                        document.getElementById("toggleResultsBtn").innerText = "Hide Results";
+
+                        const entry = document.createElement("div");
+                        entry.className = "result-entry";
+
+                        const header = document.createElement("div");
+                        header.className = "result-header";
+                        const filenameSpan = document.createElement("span");
+                        filenameSpan.textContent = result.filename;
+                        const arrow = document.createElement("span");
+                        arrow.className = "arrow";
+                        arrow.textContent = "▶";
+                        header.appendChild(filenameSpan);
+                        header.appendChild(arrow);
+
+                        const content = document.createElement("div");
+                        content.className = "result-content";
+                        content.innerHTML = `
+                            <p><strong>Length:</strong> ${result.shoreline_length_meters.toFixed(2)} meters</p>
+                            <p><strong>CRS:</strong> ${result.crs}</p>
+                            <p><a href="${result.geojson_url}"target="_blank">View GeoJSON</a></p>
+                            <p><a href="${result.download_link}" download>Download Shapefile</a></p>
+                        `;
+
+                        header.addEventListener("click", () => {
+                            content.style.display = content.style.display === "block" ? "none" : "block";
+                            arrow.textContent = content.style.display === "block" ? "▼" : "▶";
+                        });
+
+                        entry.appendChild(header);
+                        entry.appendChild(content);
+                        resultsList.appendChild(entry);
+
+                        fetch(result.geojson_url)
+                        .then(resp => resp.json())
+                        .then(geojson => {
+                            let layer = L.geoJSON(geojson, {
+                                style: { color: "red", weight: 3 }
+                            }).addTo(map);
+                            map.fitBounds(layer.getBounds());
+                            layerControl.addOverlay(layer, result.filename);
+                            drawnLayers.push(layer);
+                        });
+                    });
+
+                    updateCompareDropdowns();
+                }
+            });
+        });
+
+        function updateCompareDropdowns() {
+            fetch("/list-files")
+            .then(res => res.json())
+            .then(data => {
+                const compareFile1 = document.getElementById("compareFile1");
+                const compareFile2 = document.getElementById("compareFile2");
+                compareFile1.innerHTML = "";
+                compareFile2.innerHTML = "";
+
+                data.available_files.forEach(file => {
+                    const opt1 = document.createElement("option");
+                    opt1.value = file;
+                    opt1.text = file;
+                    compareFile1.appendChild(opt1);
+
+                    const opt2 = document.createElement("option");
+                    opt2.value = file;
+                    opt2.text = file;
+                    compareFile2.appendChild(opt2);
+                });
+            });
+        }
+
+        window.addEventListener("load", updateCompareDropdowns);
+
+        document.getElementById("clearMapBtn").addEventListener("click", () => {
+            drawnLayers.forEach(layer => map.removeLayer(layer));
+            drawnLayers.length = 0;
+        });
+
+        document.getElementById("compareBtn").addEventListener("click", function () {
+        const file1 = document.getElementById("compareFile1").value;
+        const file2 = document.getElementById("compareFile2").value;
+
+        const compareStatus = document.getElementById("compareStatusMessage");
+        const compareDownloadLink = document.getElementById("compareDownloadLink");
+
+        // Reset status and download link
+        compareStatus.innerHTML = "";
+        compareDownloadLink.innerHTML = "";
+
+        if (!file1 || !file2 || file1 === file2) {
+            compareStatus.innerHTML = `<p style="color: red;">Please select two different files to compare.</p>`;
+            return;
+        }
+
+        compareStatus.innerHTML = `<span class="spinner"></span> Comparing...`;
+
+        fetch("/compare", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ file1: file1, file2: file2 })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.error) {
+                compareStatus.innerHTML = `<p style="color: red;">${data.error}</p>`;
+                return;
+            }
+
+            compareStatus.innerHTML = `<p style="color: green;">Comparison completed</p>`;
+
+            const geojsonUrl = window.location.origin + data.geojson_url;
+            const downloadUrl = window.location.origin + data.download_link;
+
+            fetch(geojsonUrl)
+                .then(resp => resp.json())
+                .then(geojson => {
+                    const compareLayer = L.geoJSON(geojson, {
+                        style: { color: "orange", weight: 4 }
+                    }).addTo(map);
+                    map.fitBounds(compareLayer.getBounds());
+
+                    // Add to layer control with a toggleable name
+                    const label = `Comparison: ${file1} vs ${file2}`;
+                    layerControl.addOverlay(compareLayer, label);
+
+                    drawnLayers.push(compareLayer);
+                });
+
+            compareDownloadLink.innerHTML = `<a href="${downloadUrl}" download>Download Comparison Shapefile</a>`;
+        });
+    });
+    </script>
+</body>
+</html>
